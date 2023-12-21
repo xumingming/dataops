@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -22,6 +23,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
+
+import static io.github.xumingming.beauty.Beauty.drawError;
 
 @CommandLine.Command(name = "run", description = "run sql", subcommands = CommandLine.HelpCommand.class)
 public class RunCommand
@@ -80,33 +83,50 @@ public class RunCommand
             extends Thread
     {
         private final String name;
-        private final ConnectionInfo info;
+        private final ConnectionInfo connInfo;
         private final String sql;
 
-        public RunSqlTask(String name, ConnectionInfo info, String sql)
+        public RunSqlTask(String name, ConnectionInfo connInfo, String sql)
         {
             this.name = name;
-            this.info = info;
+            this.connInfo = connInfo;
             this.sql = sql;
         }
 
         @Override
         public void run()
         {
-            long counter = 0;
-            while (counter < 1000000) {
-                long start = System.currentTimeMillis();
-                Optional<String> response = runSql(info, sql);
-                String status = response.isPresent() ? response.get() : "OK";
-                long end = System.currentTimeMillis();
-                System.out.printf("[%s-%s] Status: %s, RT: %sms%n", name, counter++, status, (end - start));
+            Connection connection = null;
+            try {
+                connection = DriverManager.getConnection(connInfo.getJdbcUrl(), connInfo.getUser(), connInfo.getPassword());
+                long counter = 0;
+                while (counter < 1000000) {
+                    long start = System.currentTimeMillis();
+                    Optional<String> response = runSql(connection, sql);
+                    String status = response.isPresent() ? response.get() : "OK";
+                    long end = System.currentTimeMillis();
+                    System.out.printf("[%s-%s] Status: %s, RT: %sms%n", name, counter++, status, (end - start));
+                }
+            }
+            catch (Exception e) {
+                drawError(e.getMessage());
+                return;
+            }
+            finally {
+                if (connection != null) {
+                    try {
+                        connection.close();
+                    }
+                    catch (SQLException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
             }
         }
 
-        public Optional<String> runSql(ConnectionInfo conn, String sql)
+        public Optional<String> runSql(Connection connection, String sql)
         {
-            try (Connection connection = DriverManager.getConnection(conn.getJdbcUrl(), conn.getUser(), conn.getPassword());
-                    Statement stmt = connection.createStatement();
+            try (Statement stmt = connection.createStatement();
                     ResultSet resultSet = stmt.executeQuery(sql)) {
                 while (resultSet.next()) {
                     // Empty.
