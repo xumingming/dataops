@@ -72,12 +72,14 @@ public class RunCommand
         public void run()
         {
             Connection connection = null;
+            Statement stmt = null;
             try {
                 connection = DriverManager.getConnection(connInfo.getJdbcUrl(), connInfo.getUser(), connInfo.getPassword());
+                stmt = connection.createStatement();
                 long counter = 0;
                 while (counter < 1000000) {
                     long start = System.currentTimeMillis();
-                    Optional<String> response = runSql(connection, sql);
+                    Optional<String> response = runSql(stmt, sql);
                     String status = response.isPresent() ? response.get() : "OK";
                     long end = System.currentTimeMillis();
                     System.out.printf("[%s-%s] Status: %s, RT: %sms%n", name, counter++, status, (end - start));
@@ -85,9 +87,16 @@ public class RunCommand
             }
             catch (Exception e) {
                 drawError(e.getMessage());
-                return;
             }
             finally {
+                if (stmt != null) {
+                    try {
+                        stmt.close();
+                    }
+                    catch (SQLException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
                 if (connection != null) {
                     try {
                         connection.close();
@@ -99,10 +108,9 @@ public class RunCommand
             }
         }
 
-        public Optional<String> runSql(Connection connection, String sql)
+        public Optional<String> runSql(Statement stmt, String sql)
         {
-            try (Statement stmt = connection.createStatement();
-                    ResultSet resultSet = stmt.executeQuery(sql)) {
+            try (ResultSet resultSet = stmt.executeQuery(sql)) {
                 while (resultSet.next()) {
                     // Empty.
                 }
