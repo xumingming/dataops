@@ -71,7 +71,7 @@ dataops run test.sql 10 -p id:1,100 -v
 `id:1,100` here means `__id__` in SQL will be replaced by a random value in range: `[1, 100)`, the effect is:
 
 ```bash
-➜  poc dataops run test.sql 10 -p id:1,100 -v
+➜ dataops run test.sql 10 -p id:1,100 -v
 Host    : mysql.test.com
 Db      : test_db
 User    : test_user
