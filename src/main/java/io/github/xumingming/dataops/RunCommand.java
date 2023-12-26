@@ -5,21 +5,11 @@ import io.github.xumingming.beauty.Color;
 import io.github.xumingming.beauty.Column;
 import picocli.CommandLine;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Random;
 import java.util.concurrent.Callable;
 
-import static io.github.xumingming.beauty.Beauty.draw;
-import static io.github.xumingming.beauty.Beauty.drawError;
 import static io.github.xumingming.dataops.Utils.read;
 
 @CommandLine.Command(name = "run", description = "run sql", subcommands = CommandLine.HelpCommand.class)
@@ -53,16 +43,16 @@ public class RunCommand
         String str = Beauty.detail(conf, Arrays.asList(Column.column("Host", (DataOpsConf theConf) -> conf.getHost()), Column.column("Db", (DataOpsConf theConf) -> conf.getDb()), Column.column("User", (DataOpsConf theConf) -> conf.getUser()), Column.column("Password", (DataOpsConf theConf) -> conf.getPassword())), Color.NONE);
         System.out.println(str);
 
-        List<PlaceholderInfo> placeholderInfos = new ArrayList<>();
-        if (placeholders != null && !placeholders.isEmpty()) {
-            placeholderInfos = parsePlaceholders(placeholders);
+        List<Placeholder> placeholders = new ArrayList<>();
+        if (this.placeholders != null && !this.placeholders.isEmpty()) {
+            placeholders = parsePlaceholders(this.placeholders);
         }
 
-        List<RunSqlTask> tasks = new ArrayList<>(parallelism);
+        List<SqlRunner> tasks = new ArrayList<>(parallelism);
         ConnectionInfo conn = new ConnectionInfo(conf.getHost(), 3306, conf.getDb(), conf.getUser(), conf.getPassword());
         for (int i = 0; i < parallelism; i++) {
             String sql = read(sqlPath);
-            RunSqlTask task = new RunSqlTask("Thread" + i, conn, sql, placeholderInfos, conf.getSqlGenMode(), verbose);
+            SqlRunner task = new SqlRunner("Thread" + i, conn, sql, placeholders, conf.getSqlGenMode(), verbose);
             tasks.add(task);
             task.start();
         }
@@ -74,83 +64,10 @@ public class RunCommand
         return 0;
     }
 
-    public static class PlaceholderInfo
-    {
-        private String key;
-        private int start;
-        private int end;
-
-        public PlaceholderInfo(String key, int start, int end)
-        {
-            this.key = key;
-            this.start = start;
-            this.end = end;
-        }
-
-        public String getKey()
-        {
-            return key;
-        }
-
-        public void setKey(String key)
-        {
-            this.key = key;
-        }
-
-        public int getStart()
-        {
-            return start;
-        }
-
-        public void setStart(int start)
-        {
-            this.start = start;
-        }
-
-        public int getEnd()
-        {
-            return end;
-        }
-
-        public void setEnd(int end)
-        {
-            this.end = end;
-        }
-
-        @Override
-        public boolean equals(Object o)
-        {
-            if (this == o) {
-                return true;
-            }
-            if (o == null || getClass() != o.getClass()) {
-                return false;
-            }
-            PlaceholderInfo that = (PlaceholderInfo) o;
-            return start == that.start && end == that.end && key.equals(that.key);
-        }
-
-        @Override
-        public int hashCode()
-        {
-            return Objects.hash(key, start, end);
-        }
-
-        @Override
-        public String toString()
-        {
-            return "PlaceholderInfo{" +
-                    "key='" + key + '\'' +
-                    ", start=" + start +
-                    ", end=" + end +
-                    '}';
-        }
-    }
-
-    public static List<PlaceholderInfo> parsePlaceholders(String placeholders)
+    public static List<Placeholder> parsePlaceholders(String placeholders)
     {
         String[] topParts = placeholders.split(";");
-        List<PlaceholderInfo> ret = new ArrayList<>();
+        List<Placeholder> ret = new ArrayList<>();
         for (String topPart : topParts) {
             String[] secondParts = topPart.split(":");
             if (secondParts.length != 2) {
@@ -167,109 +84,9 @@ public class RunCommand
             int start = Integer.parseInt(valueParts[0].trim());
             int end = Integer.parseInt(valueParts[1].trim());
 
-            ret.add(new PlaceholderInfo(key, start, end));
+            ret.add(new Placeholder(key, start, end));
         }
 
         return ret;
-    }
-
-    public static String rewrite(String sql, List<PlaceholderInfo> placeholderInfos)
-    {
-        String ret = sql;
-        for (PlaceholderInfo info : placeholderInfos) {
-            int value = info.start + new Random().nextInt(info.end - info.start);
-            ret = ret.replaceAll("__" + info.key + "__", String.valueOf(value));
-        }
-
-        return ret;
-    }
-
-    public static class RunSqlTask
-            extends Thread
-    {
-        private final String name;
-        private final ConnectionInfo connInfo;
-        private final String sqlTemplate;
-        private final List<PlaceholderInfo> placeholderInfos;
-        private final boolean verbose;
-        private final SqlGenMode sqlGenMode;
-
-        private String sql;
-        public RunSqlTask(String name, ConnectionInfo connInfo, String sqlTemplate, List<PlaceholderInfo> placeholderInfos, SqlGenMode sqlGenMode, boolean verbose)
-        {
-            this.name = name;
-            this.connInfo = connInfo;
-            this.sqlTemplate = sqlTemplate;
-            this.placeholderInfos = placeholderInfos;
-            this.verbose = verbose;
-            this.sqlGenMode = sqlGenMode;
-
-            if (sqlGenMode == SqlGenMode.PER_THREAD) {
-                sql = rewrite(sqlTemplate, placeholderInfos);
-                if (verbose) {
-                    draw(String.format("%s will run SQL: %s", name, sql));
-                }
-            }
-        }
-
-        @Override
-        public void run()
-        {
-            Connection connection = null;
-            Statement stmt = null;
-            try {
-                connection = DriverManager.getConnection(connInfo.getJdbcUrl(), connInfo.getUser(), connInfo.getPassword());
-                stmt = connection.createStatement();
-                long counter = 0;
-                while (counter < 100000000) {
-                    if (sqlGenMode == SqlGenMode.PER_RUN) {
-                        sql = rewrite(sqlTemplate, placeholderInfos);
-                        if (verbose) {
-                            draw(String.format("[%s-%s] will run SQL: %s", name, counter, sql));
-                        }
-                    }
-
-                    long start = System.currentTimeMillis();
-                    Optional<String> response = runSql(stmt, sql);
-                    String status = response.isPresent() ? response.get() : "OK";
-                    long end = System.currentTimeMillis();
-                    System.out.printf("[%s-%s] Status: %s, RT: %sms%n", name, counter++, status, (end - start));
-                }
-            }
-            catch (Exception e) {
-                drawError(e.getMessage());
-            }
-            finally {
-                if (stmt != null) {
-                    try {
-                        stmt.close();
-                    }
-                    catch (SQLException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-                if (connection != null) {
-                    try {
-                        connection.close();
-                    }
-                    catch (SQLException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-            }
-        }
-
-        public Optional<String> runSql(Statement stmt, String sql)
-        {
-            try (ResultSet resultSet = stmt.executeQuery(sql)) {
-                while (resultSet.next()) {
-                    // Empty.
-                }
-                return Optional.empty();
-            }
-            catch (Exception e) {
-                return Optional.of(e.getMessage());
-            }
-        }
     }
 }
