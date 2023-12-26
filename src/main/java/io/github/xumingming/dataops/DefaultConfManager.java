@@ -27,6 +27,10 @@ public class DefaultConfManager
             ObjectMapper mapper = getObjectMapper();
             DataOpsConf dataOpsConf = mapper.readValue(new File(configFile), DataOpsConf.class);
 
+            if (dataOpsConf.getSqlGenMode() == null) {
+                // Default to PER_RUN.
+                dataOpsConf.setSqlGenMode(SqlGenMode.PER_RUN);
+            }
             return dataOpsConf;
         }
         catch (Exception e) {

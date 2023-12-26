@@ -62,12 +62,7 @@ public class RunCommand
         ConnectionInfo conn = new ConnectionInfo(conf.getHost(), 3306, conf.getDb(), conf.getUser(), conf.getPassword());
         for (int i = 0; i < parallelism; i++) {
             String sql = read(sqlPath);
-            sql = rewrite(sql, placeholderInfos);
-            if (verbose) {
-                draw(String.format("Thread %s will run SQL: %s", i, sql));
-            }
-
-            RunSqlTask task = new RunSqlTask("Thread" + i, conn, sql);
+            RunSqlTask task = new RunSqlTask("Thread" + i, conn, sql, placeholderInfos, conf.getSqlGenMode(), verbose);
             tasks.add(task);
             task.start();
         }
@@ -194,13 +189,27 @@ public class RunCommand
     {
         private final String name;
         private final ConnectionInfo connInfo;
-        private final String sql;
+        private final String sqlTemplate;
+        private final List<PlaceholderInfo> placeholderInfos;
+        private final boolean verbose;
+        private final SqlGenMode sqlGenMode;
 
-        public RunSqlTask(String name, ConnectionInfo connInfo, String sql)
+        private String sql;
+        public RunSqlTask(String name, ConnectionInfo connInfo, String sqlTemplate, List<PlaceholderInfo> placeholderInfos, SqlGenMode sqlGenMode, boolean verbose)
         {
             this.name = name;
             this.connInfo = connInfo;
-            this.sql = sql;
+            this.sqlTemplate = sqlTemplate;
+            this.placeholderInfos = placeholderInfos;
+            this.verbose = verbose;
+            this.sqlGenMode = sqlGenMode;
+
+            if (sqlGenMode == SqlGenMode.PER_THREAD) {
+                sql = rewrite(sqlTemplate, placeholderInfos);
+                if (verbose) {
+                    draw(String.format("%s will run SQL: %s", name, sql));
+                }
+            }
         }
 
         @Override
@@ -212,7 +221,14 @@ public class RunCommand
                 connection = DriverManager.getConnection(connInfo.getJdbcUrl(), connInfo.getUser(), connInfo.getPassword());
                 stmt = connection.createStatement();
                 long counter = 0;
-                while (counter < 1000000) {
+                while (counter < 100000000) {
+                    if (sqlGenMode == SqlGenMode.PER_RUN) {
+                        sql = rewrite(sqlTemplate, placeholderInfos);
+                        if (verbose) {
+                            draw(String.format("[%s-%s] will run SQL: %s", name, counter, sql));
+                        }
+                    }
+
                     long start = System.currentTimeMillis();
                     Optional<String> response = runSql(stmt, sql);
                     String status = response.isPresent() ? response.get() : "OK";
@@ -252,7 +268,6 @@ public class RunCommand
                 return Optional.empty();
             }
             catch (Exception e) {
-                e.printStackTrace();
                 return Optional.of(e.getMessage());
             }
         }

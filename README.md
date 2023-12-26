@@ -104,6 +104,18 @@ Then run with:
 dataops run test.sql 10 -p id:1,100;name:1,100 -v
 ```
 
+### Specify sqlGenMode
+
+```bash
+sqlGenMode: PER_THREAD/PER_RUN
+```
+
+sqlGenMode let you choose whether different runs in the same thread executing the same sql or not.
+
+- PER_THREAD: every run in the same thread execute the same sql.
+- PER_RUN: every run execute different sql. **PER_RUN is the default mode**.
+
+NOTE: sqlGenMode can have effect only if you have placeholders in your sql.
 
 ### Show verbose log
 

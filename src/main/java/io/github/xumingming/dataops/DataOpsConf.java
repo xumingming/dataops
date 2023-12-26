@@ -7,6 +7,7 @@ public class DataOpsConf
     private String user;
     private String password;
     private String db;
+    private SqlGenMode sqlGenMode;
 
     public String getHost()
     {
@@ -56,5 +57,15 @@ public class DataOpsConf
     public void setDb(final String db)
     {
         this.db = db;
+    }
+
+    public SqlGenMode getSqlGenMode()
+    {
+        return sqlGenMode;
+    }
+
+    public void setSqlGenMode(SqlGenMode sqlGenMode)
+    {
+        this.sqlGenMode = sqlGenMode;
     }
 }
