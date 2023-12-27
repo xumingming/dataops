@@ -19,6 +19,19 @@ public class Utils
 {
     private Utils() {}
 
+    public static String mask(String str)
+    {
+        if (str == null) {
+            return "<null>";
+        }
+
+        if (str.length() == 1) {
+            return "*******";
+        }
+
+        return str.charAt(0) + "****" + str.charAt(str.length() - 1);
+    }
+
     public static ObjectMapper getObjectMapper()
     {
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());

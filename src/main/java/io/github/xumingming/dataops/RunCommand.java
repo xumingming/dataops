@@ -10,6 +10,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Callable;
 
+import static io.github.xumingming.dataops.Utils.mask;
 import static io.github.xumingming.dataops.Utils.read;
 
 @CommandLine.Command(name = "run", description = "run sql", subcommands = CommandLine.HelpCommand.class)
@@ -40,7 +41,13 @@ public class RunCommand
         ConfManager confManager = ConfManager.create();
         DataOpsConf conf = confManager.readDataOpsConf();
 
-        String str = Beauty.detail(conf, Arrays.asList(Column.column("Host", (DataOpsConf theConf) -> conf.getHost()), Column.column("Db", (DataOpsConf theConf) -> conf.getDb()), Column.column("User", (DataOpsConf theConf) -> conf.getUser()), Column.column("Password", (DataOpsConf theConf) -> conf.getPassword())), Color.NONE);
+        String str = Beauty.detail(conf, Arrays.asList(
+                        Column.column("Host", (DataOpsConf theConf) -> conf.getHost()),
+                        Column.column("Db", (DataOpsConf theConf) -> conf.getDb()),
+                        Column.column("Port", (DataOpsConf theConf) -> conf.getPort()),
+                        Column.column("User", (DataOpsConf theConf) -> conf.getUser()),
+                        Column.column("Password", (DataOpsConf theConf) -> mask(conf.getPassword()))),
+                Color.NONE);
         System.out.println(str);
 
         List<Placeholder> placeholders = new ArrayList<>();
@@ -49,7 +56,7 @@ public class RunCommand
         }
 
         List<SqlRunner> tasks = new ArrayList<>(parallelism);
-        ConnectionInfo conn = new ConnectionInfo(conf.getHost(), 3306, conf.getDb(), conf.getUser(), conf.getPassword());
+        ConnectionInfo conn = new ConnectionInfo(conf.getHost(), conf.getPort(), conf.getDb(), conf.getUser(), conf.getPassword());
         for (int i = 0; i < parallelism; i++) {
             String sql = read(sqlPath);
             SqlRunner task = new SqlRunner("Thread" + i, conn, sql, placeholders, conf.getSqlGenMode(), verbose);

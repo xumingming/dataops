@@ -31,6 +31,11 @@ public class DefaultConfManager
                 // Default to PER_RUN.
                 dataOpsConf.setSqlGenMode(SqlGenMode.PER_RUN);
             }
+
+            if (dataOpsConf.getPort() <= 0) {
+                dataOpsConf.setPort(3306);
+            }
+
             return dataOpsConf;
         }
         catch (Exception e) {
