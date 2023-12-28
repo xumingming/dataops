@@ -15,6 +15,7 @@ You need to have a config file at `~/.dataops.yaml`:
 ```
 host: <db_host>
 db: <db_name>
+port: <port>
 user: <user_name>
 password: <password>
 ```
