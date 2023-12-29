@@ -121,4 +121,12 @@
             </plugin>
         </plugins>
     </build>
+
+    <distributionManagement>
+        <repository>
+            <id>github</id>
+            <name>GitHub OWNER Apache Maven Packages</name>
+            <url>https://maven.pkg.github.com/xumingming/dataops</url>
+        </repository>
+    </distributionManagement>
 </project>
